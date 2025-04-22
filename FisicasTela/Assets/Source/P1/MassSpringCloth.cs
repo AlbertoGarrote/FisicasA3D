@@ -49,13 +49,13 @@ public class MassSpringCloth : MonoBehaviour
     public float stiffnessSpringTraccion;
     public float stiffnessSpringFlexion;
 
-    public GameObject fixer;
+    public List<GameObject> fixers;
 
     public float dampingMuelle = 0.1f;
     public float dampingNodo = 0.1f;
 
     public Vector3 viento = new Vector3(1, 0, 0);
-    public float friccionViento = 0.5f; 
+    public float friccionViento = 0.5f;
 
     #endregion
 
@@ -69,8 +69,11 @@ public class MassSpringCloth : MonoBehaviour
         mesh = GetComponent<MeshFilter>().mesh;
         InicializarNodos();
         InicializarMuelles();
+        EncontrarFixers();
         FijarNodosFixer();
     }
+
+
 
     public void Update()
     {
@@ -125,8 +128,7 @@ public class MassSpringCloth : MonoBehaviour
             springF.ComputeForces(dampingMuelle);
         }
 
-        // Aplica las fuerzas del viento
-        //Vector3 viento = new Vector3(Mathf.Sin(Time.time), 0, Mathf.Cos(Time.time)); 
+        // aplica las fuerzas del viento
         AplicarFuerzaViento(viento, friccionViento);
 
         // integrar Euler Simplectico
@@ -175,9 +177,6 @@ public class MassSpringCloth : MonoBehaviour
             Vector3 worldPos = transform.TransformPoint(vertices[i]);
             nodes.Add(new Node(worldPos, massNodes));
         }
-
-        //fijar arbitrariamente el primer nodo
-        //nodes[0].isFixed = true;
     }
 
     void InicializarMuelles()
@@ -199,80 +198,83 @@ public class MassSpringCloth : MonoBehaviour
             aristas.Add(new Arista(i2, i0, i1));
         }
 
-        // Paso 2: Ordenar las aristas por sus extremos (sin usar IComparable)
+        // ordenar las aristas para ver cuales se repiten
         OrdenarAristas(aristas);
 
-
-        // Paso 3: Recorrer la lista ordenada y crear muelles
         int index = 0;
         while (index < aristas.Count)
         {
             Arista aristaActual = aristas[index];
             int count = 1;
 
-            // Ver cuántas veces se repite esta arista
+            // ver cuantas veces se repite la arista
             while (index + count < aristas.Count && aristaActual.mismaArista(aristas[index + count]))
             {
                 count++;
             }
 
-            // Crear un muelle de tracción (solo una vez)
             AgregarMuelleTraccion(aristaActual.a, aristaActual.b);
 
-            // Si la arista es compartida por dos triángulos, creamos también un muelle de flexión
+            // si se repite la arista se crea un muelle de flexion
             if (count == 2)
             {
                 Arista e1 = aristas[index];
                 Arista e2 = aristas[index + 1];
 
-                // Muelle entre los dos vértices opuestos
                 AgregarMuelleFlexion(e1.c, e2.c);
             }
-
-            // Saltar al siguiente grupo de aristas distintas
             index += count;
-
         }
     }
 
+    // MUELLES DE TRACCION
     void AgregarMuelleTraccion(int i, int j)
     {
         springsTraccion.Add(new Spring(nodes[i], nodes[j], stiffnessSpringTraccion));
     }
 
-    // MUELLES DE FLEXION, ELIMINACIÓN DUPLICADOS
+    // MUELLES DE FLEXION
     void AgregarMuelleFlexion(int i, int j)
     {
         springsFlexion.Add(new Spring(nodes[i], nodes[j], stiffnessSpringFlexion));
     }
 
-    
+
     void OrdenarAristas(List<Arista> aristas)
     {
-        // Usamos Sort para ordenar la lista usando los parámetros a y b
+        // funcion lambda para ordenar aristas
         aristas.Sort((e1, e2) =>
         {
-            int comparador = e1.a.CompareTo(e2.a);  // Primero compara el vértice 'a'
+            int comparador = e1.a.CompareTo(e2.a);
             if (comparador != 0)
                 return comparador;
 
-            return e1.b.CompareTo(e2.b);  // Si son iguales en 'a', compara con 'b'
+            return e1.b.CompareTo(e2.b);
         });
     }
 
     //FIXER
 
+    void EncontrarFixers()
+    {
+        GameObject[] fixersObj = GameObject.FindGameObjectsWithTag("fixer");
+        fixers = new List<GameObject>(fixersObj);
+    }
+
     void FijarNodosFixer()
     {
-        Collider colliderFixed = fixer.GetComponent<Collider>();
-
-        foreach (Node node in nodes)
+        foreach (var fixer in fixers)
         {
-            if (colliderFixed.bounds.Contains(node.pos))
+            Collider colliderFixed = fixer.GetComponent<Collider>();
+
+            foreach (Node node in nodes)
             {
-                node.isFixed = true;
-                node.fixer = fixer.transform;
-                node.diferenciaFixer = node.pos - fixer.transform.position;
+                if (colliderFixed.bounds.Contains(node.pos))
+                {
+                    node.isFixed = true;
+                    node.fixer = fixer.transform;
+                    node.diferenciaFixer = node.pos - fixer.transform.position;
+                }
             }
         }
     }
@@ -300,13 +302,13 @@ public class MassSpringCloth : MonoBehaviour
         Vector3 velocidadRelativa = viento - velocidadTriangulo;
         float componenteNormalVelocidad = Vector3.Dot(velocidadRelativa, normal);
 
-        // área
+        // área del triangulo
         Vector3 edge1 = nodes[v2].pos - nodes[v1].pos;
         Vector3 edge2 = nodes[v3].pos - nodes[v1].pos;
         float areaTriangulo = 0.5f * Vector3.Cross(edge1, edge2).magnitude;
 
-        // Calcular la fuerza de fricción proporcional a la componente normal de la velocidad
-        Vector3 fuerzaViento = -friccion * areaTriangulo * componenteNormalVelocidad *  normal;
+        // formula viento
+        Vector3 fuerzaViento = -friccion * areaTriangulo * componenteNormalVelocidad * normal;
 
         return fuerzaViento;
     }
@@ -323,9 +325,9 @@ public class MassSpringCloth : MonoBehaviour
 
             Vector3 fuerzaViento = FuerzaViento(v1, v2, v3, viento, friccion);
 
-            nodes[v1].force += fuerzaViento / 3.0f;
-            nodes[v2].force += fuerzaViento / 3.0f;
-            nodes[v3].force += fuerzaViento / 3.0f;
+            nodes[v1].force += fuerzaViento / 3f;
+            nodes[v2].force += fuerzaViento / 3f;
+            nodes[v3].force += fuerzaViento / 3f;
         }
     }
 }
