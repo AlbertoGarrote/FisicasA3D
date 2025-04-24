@@ -36,6 +36,7 @@ public class MassSpringCloth : MonoBehaviour
 
     public bool Paused;
     public float TimeStep;
+    public int subSteps = 10;
     public Vector3 Gravity;
     public Integration IntegrationMethod;
     public float massNodes;
@@ -54,8 +55,11 @@ public class MassSpringCloth : MonoBehaviour
     public float dampingMuelle = 0.1f;
     public float dampingNodo = 0.1f;
 
-    public Vector3 viento = new Vector3(1, 0, 0);
+    public Vector3 viento = Vector3.zero;
     public float friccionViento = 0.5f;
+
+    public float k_penalty = 100;
+    public GameObject esferaPenalty;
 
     #endregion
 
@@ -86,14 +90,21 @@ public class MassSpringCloth : MonoBehaviour
         if (this.Paused)
             return; // Not simulating
 
-        // Select integration method
-        switch (this.IntegrationMethod)
+        float subTimeStep = TimeStep / subSteps;
+
+        for (int i = 0; i < subSteps; i++)
         {
-            case Integration.Explicit: this.stepExplicit(); break;
-            case Integration.Symplectic: this.stepSymplectic(); break;
-            default:
-                throw new System.Exception("[ERROR] Should never happen!");
+            // Select integration method
+            switch (this.IntegrationMethod)
+            {
+                case Integration.Explicit: this.stepExplicit(); break;
+                case Integration.Symplectic: this.stepSymplectic(subTimeStep); break;
+                default:
+                    throw new System.Exception("[ERROR] Should never happen!");
+            }
         }
+        // actualizamos la mesh solamente después de hacer todos los supSteps
+        ActualizarMesh();
 
     }
 
@@ -109,7 +120,7 @@ public class MassSpringCloth : MonoBehaviour
     /// <summary>
     /// Performs a simulation step in 1D using Symplectic integration.
     /// </summary>
-    private void stepSymplectic()
+    private void stepSymplectic(float subTimeStep)
     {
         // fuerzas nodos
         foreach (Node node in nodes)
@@ -128,8 +139,10 @@ public class MassSpringCloth : MonoBehaviour
             springF.ComputeForces(dampingMuelle);
         }
 
-        // aplica las fuerzas del viento
+        // aplica las fuerzas del viento y penalty
         AplicarFuerzaViento(viento, friccionViento);
+
+        AplicarFuerzaPenalty(esferaPenalty, k_penalty);
 
         // integrar Euler Simplectico
         foreach (Node node in nodes)
@@ -141,8 +154,8 @@ public class MassSpringCloth : MonoBehaviour
             }
             if (!node.isFixed)
             {
-                node.vel += TimeStep / node.mass * node.force;
-                node.pos += TimeStep * node.vel;
+                node.vel += subTimeStep / node.mass * node.force;
+                node.pos += subTimeStep * node.vel;
             }
         }
 
@@ -155,7 +168,7 @@ public class MassSpringCloth : MonoBehaviour
             springF.UpdateLength();
         }
 
-        ActualizarMesh();
+        //ActualizarMesh();
     }
 
     void ActualizarMesh()
@@ -328,6 +341,30 @@ public class MassSpringCloth : MonoBehaviour
             nodes[v1].force += fuerzaViento / 3f;
             nodes[v2].force += fuerzaViento / 3f;
             nodes[v3].force += fuerzaViento / 3f;
+        }
+    }
+
+    // CONTACTO CON ESFERA
+
+    void AplicarFuerzaPenalty(GameObject esfera, float k_penalty)
+    {
+        SphereCollider colliderEsfera = esfera.GetComponent<SphereCollider>();
+        Vector3 centro = colliderEsfera.bounds.center;
+        float radio = colliderEsfera.bounds.extents.x;
+
+        foreach (Node nodo in nodes)
+        {
+            Vector3 direcionFuerza = nodo.pos - centro;
+            float distancia = direcionFuerza.magnitude;
+
+            if (distancia < radio) // está dentro de la esfera
+            {
+                float penetracion = radio - distancia;
+                Vector3 normalSalidaFuerza = direcionFuerza.normalized;
+
+                Vector3 fuerzaPenalty = k_penalty * penetracion * normalSalidaFuerza;
+                nodo.force += fuerzaPenalty;
+            }
         }
     }
 }
