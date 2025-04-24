@@ -161,7 +161,9 @@ public class MassSpringCloth : MonoBehaviour
     void ActualizarMesh()
     {
         for (int i = 0; i < nodes.Count; i++)
+        {
             vertices[i] = transform.InverseTransformPoint(nodes[i].pos);
+        }
 
         mesh.vertices = vertices;
         mesh.RecalculateNormals();
@@ -186,7 +188,6 @@ public class MassSpringCloth : MonoBehaviour
         int[] triangles = mesh.triangles;
         List<Arista> aristas = new List<Arista>();
 
-        // Paso 1: Crear todas las aristas con su vértice opuesto
         for (int i = 0; i < triangles.Length; i += 3)
         {
             int i0 = triangles[i];
@@ -254,7 +255,6 @@ public class MassSpringCloth : MonoBehaviour
     }
 
     //FIXER
-
     void EncontrarFixers()
     {
         GameObject[] fixersObj = GameObject.FindGameObjectsWithTag("fixer");
