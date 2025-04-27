@@ -222,7 +222,7 @@ public class MassSpringCloth : MonoBehaviour
             int count = 1;
 
             // ver cuantas veces se repite la arista
-            while (index + count < aristas.Count && aristaActual.mismaArista(aristas[index + count]))
+            if (index + count < aristas.Count && aristaActual.mismaArista(aristas[index + count]))
             {
                 count++;
             }
