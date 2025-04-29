@@ -1004,6 +1004,10 @@ PrefabInstance:
       value: 5000
       objectReference: {fileID: 0}
     - target: {fileID: 9152344454860745241, guid: e5f3e84d8223d0c4d8b8febbc661a28e, type: 3}
+      propertyPath: dampingMuelle
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9152344454860745241, guid: e5f3e84d8223d0c4d8b8febbc661a28e, type: 3}
       propertyPath: esferaPenalty
       value: 
       objectReference: {fileID: 6430958655717773099}
@@ -1064,7 +1068,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: EsferaPenalty
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: -5602146438962622753, guid: 7c8ad19fee009334cbf2c79f1fd8dc94, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
@@ -1090,7 +1095,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moverEsfera: 0
-  velocidadMovimiento: 0.5
+  velocidad: 5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -103,7 +103,7 @@ public class MassSpringCloth : MonoBehaviour
                     throw new System.Exception("[ERROR] Should never happen!");
             }
         }
-        // actualizamos la mesh solamente después de hacer todos los supSteps
+        // actualizamos la mesh después de hacer todos los supSteps
         ActualizarMesh();
 
     }
@@ -179,7 +179,6 @@ public class MassSpringCloth : MonoBehaviour
         }
 
         mesh.vertices = vertices;
-        mesh.RecalculateNormals();
     }
 
     void InicializarNodos()
@@ -221,7 +220,7 @@ public class MassSpringCloth : MonoBehaviour
             Arista aristaActual = aristas[index];
             int count = 1;
 
-            // ver cuantas veces se repite la arista
+            // ver si se repite la arista
             if (index + count < aristas.Count && aristaActual.mismaArista(aristas[index + count]))
             {
                 count++;
@@ -350,7 +349,7 @@ public class MassSpringCloth : MonoBehaviour
     {
         SphereCollider colliderEsfera = esfera.GetComponent<SphereCollider>();
         Vector3 centro = colliderEsfera.bounds.center;
-        float radio = colliderEsfera.bounds.extents.x;
+        float radio = colliderEsfera.bounds.extents.x * 1.1f;
 
         foreach (Node nodo in nodes)
         {
