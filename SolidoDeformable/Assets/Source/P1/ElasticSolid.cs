@@ -12,12 +12,12 @@ using System.Reflection;
 /// implementation using diverse integration methods: explicit,
 /// implicit, Verlet and semi-implicit.
 /// </summary>
-public class SolidDeformation : MonoBehaviour
+public class ElasticSolid : MonoBehaviour
 {
     /// <summary>
     /// Default constructor. Zero all. 
     /// </summary>
-    public SolidDeformation()
+    public ElasticSolid()
     {
         this.Paused = true;
         this.TimeStep = 0.01f;
@@ -44,6 +44,7 @@ public class SolidDeformation : MonoBehaviour
     public float massNodes;
 
     [SerializeField] public List<Node> nodes;
+    [SerializeField] public List<Tetraedro> tetraedros;
     [SerializeField] public List<Spring> springsTraccion;
     //[SerializeField] public List<Spring> springsFlexion;
 
@@ -63,7 +64,7 @@ public class SolidDeformation : MonoBehaviour
     public float k_penalty = 100;
     public GameObject esferaPenalty;
 
-    public TextAsset fileName;
+    public TextAsset nodeFile, eleFile;
 
     #endregion
 
@@ -76,6 +77,7 @@ public class SolidDeformation : MonoBehaviour
     {
         //mesh = GetComponent<MeshFilter>().mesh;
         InicializarNodos();
+        InicializarTetraedros();
         InicializarMuelles();
         EncontrarFixers();
         FijarNodosFixer();
@@ -98,14 +100,14 @@ public class SolidDeformation : MonoBehaviour
 
         //for (int i = 0; i < subSteps; i++)
         //{
-            // Select integration method
-            switch (this.IntegrationMethod)
-            {
-                case Integration.Explicit: this.stepExplicit(); break;
-                case Integration.Symplectic: this.stepSymplectic(); break;
-                default:
-                    throw new System.Exception("[ERROR] Should never happen!");
-            }
+        // Select integration method
+        switch (this.IntegrationMethod)
+        {
+            case Integration.Explicit: this.stepExplicit(); break;
+            case Integration.Symplectic: this.stepSymplectic(); break;
+            default:
+                throw new System.Exception("[ERROR] Should never happen!");
+        }
         //}
         // actualizamos la mesh despu s de hacer todos los supSteps
         ActualizarMesh();
@@ -168,57 +170,60 @@ public class SolidDeformation : MonoBehaviour
         //{
         //    vertices[i] = transform.InverseTransformPoint(nodes[i].pos);
         //}
-
     }
 
     void InicializarNodos()
     {
+        string[] lines = nodeFile.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
         nodes = new List<Node>();
 
-        //for (int i = 0; i < vertices.Length; i++)
-        //{
-        //    Vector3 worldPos = transform.TransformPoint(vertices[i]);
-        //    nodes.Add(new Node(worldPos, massNodes));
-        //}
-
-        string[] textString = fileName.text.Split(new string[] { " ", "\n", "\r" }, System.StringSplitOptions.RemoveEmptyEntries);
         CultureInfo locale = new CultureInfo("en-US");
+        int numNodes = int.Parse(lines[0].Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)[0]);
 
-        int numNodes = int.Parse(textString[0]);
-
-        //nodes.Add(new Node(new Vector3(0, 0, 0), massNodes)); // 0
-        //nodes.Add(new Node(new Vector3(5, 0, 0), massNodes)); // 1
-        //nodes.Add(new Node(new Vector3(2.5f, 5, 0), massNodes)); // 2
-        //nodes.Add(new Node(new Vector3(2.5f, 2.5f, 5), massNodes)); // 3
-
-        int index = 1;
-
-        for (int i = 0; i < numNodes; i++)
+        for (int i = 1; i <= numNodes; i++)
         {
-            float x = float.Parse(textString[index++], locale);
-            float y = float.Parse(textString[index++], locale);
-            float z = float.Parse(textString[index++], locale);
+            string line = lines[i].Trim();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            string[] parts = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+
+            float x = float.Parse(parts[1], locale);
+            float y = float.Parse(parts[2], locale);
+            float z = float.Parse(parts[3], locale);
 
             Vector3 position = new Vector3(x, y, z);
             Node node = new Node(position, massNodes);
             nodes.Add(node);
+
+
         }
     }
 
     void InicializarMuelles()
     {
-        AgregarMuelleTraccion(0, 1);
-        AgregarMuelleTraccion(0, 2);
-        AgregarMuelleTraccion(0, 3);
-        AgregarMuelleTraccion(1, 2);
-        AgregarMuelleTraccion(1, 3);
-        AgregarMuelleTraccion(2, 3);
+        //AgregarMuelleTraccion(0, 1);
+        //AgregarMuelleTraccion(0, 2);
+        //AgregarMuelleTraccion(0, 3);
+        //AgregarMuelleTraccion(1, 2);
+        //AgregarMuelleTraccion(1, 3);
+        //AgregarMuelleTraccion(2, 3);
+        foreach (Tetraedro tetra in tetraedros)
+        {
+            AgregarMuelleTraccion(tetra.a, tetra.b);
+            AgregarMuelleTraccion(tetra.a, tetra.c);
+            AgregarMuelleTraccion(tetra.a, tetra.d);
+            AgregarMuelleTraccion(tetra.b, tetra.c);
+            AgregarMuelleTraccion(tetra.b, tetra.d);
+            AgregarMuelleTraccion(tetra.c, tetra.d);
+        }
+
+        
     }
 
     // MUELLES DE TRACCION
-    void AgregarMuelleTraccion(int i, int j)
+    void AgregarMuelleTraccion(Node i, Node j)
     {
-        springsTraccion.Add(new Spring(nodes[i], nodes[j], stiffnessSpringTraccion));
+        springsTraccion.Add(new Spring(i, j, stiffnessSpringTraccion));
     }
 
     //FIXER
@@ -248,14 +253,17 @@ public class SolidDeformation : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        if (nodes == null || springsTraccion == null) return;
+        if (nodes == null || springsTraccion == null || tetraedros == null) return;
 
         Gizmos.color = Color.blue;
-        foreach (Node node in nodes)
-        {
-            Gizmos.DrawSphere(node.pos, 0.05f);
-        }
 
+        foreach (Tetraedro tetra in tetraedros)
+        {
+            Gizmos.DrawSphere(tetra.a.pos, 0.10f);
+            Gizmos.DrawSphere(tetra.b.pos, 0.10f);
+            Gizmos.DrawSphere(tetra.c.pos, 0.10f);
+            Gizmos.DrawSphere(tetra.d.pos, 0.10f);
+        }
         Gizmos.color = Color.red;
         foreach (Spring spring in springsTraccion)
         {
@@ -263,6 +271,29 @@ public class SolidDeformation : MonoBehaviour
         }
     }
 
+
+    void InicializarTetraedros()
+    {
+        tetraedros = new List<Tetraedro>();
+
+        string[] lines = eleFile.text.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+        int numTetra = int.Parse(lines[0].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries)[0]);
+
+        for (int i = 1; i <= numTetra; i++)
+        {
+            string[] parts = lines[i].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+            int idx0 = int.Parse(parts[1]) - 1;
+            int idx1 = int.Parse(parts[2]) - 1;
+            int idx2 = int.Parse(parts[3]) - 1;
+            int idx3 = int.Parse(parts[4]) - 1;
+
+            Tetraedro t = new Tetraedro(nodes[idx0], nodes[idx1], nodes[idx2], nodes[idx3]);
+            tetraedros.Add(t);
+        }
+    }
 }
+
 
 
