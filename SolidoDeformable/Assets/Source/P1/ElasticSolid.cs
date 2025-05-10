@@ -6,6 +6,8 @@ using System.Net.NetworkInformation;
 using System;
 using System.Globalization;
 using System.Reflection;
+using System.Linq;
+using UnityEngine.UIElements;
 
 /// <summary>
 /// Basic physics manager capable of simulating a given ISimulable
@@ -46,6 +48,7 @@ public class ElasticSolid : MonoBehaviour
     [SerializeField] public List<Node> nodes;
     [SerializeField] public List<Tetraedro> tetraedros;
     [SerializeField] public List<Spring> springsTraccion;
+    [SerializeField] public List<VerticeInfo> verticesContenidos;
     //[SerializeField] public List<Spring> springsFlexion;
 
     //public Mesh mesh;
@@ -64,7 +67,9 @@ public class ElasticSolid : MonoBehaviour
     public float k_penalty = 100;
     public GameObject esferaPenalty;
 
+    // solido deformable
     public TextAsset nodeFile, eleFile;
+    private Mesh meshAsset;
 
     #endregion
 
@@ -78,6 +83,7 @@ public class ElasticSolid : MonoBehaviour
         //mesh = GetComponent<MeshFilter>().mesh;
         InicializarNodos();
         InicializarTetraedros();
+        InicializarBlend();
         InicializarMuelles();
         EncontrarFixers();
         FijarNodosFixer();
@@ -110,7 +116,7 @@ public class ElasticSolid : MonoBehaviour
         }
         //}
         // actualizamos la mesh despu s de hacer todos los supSteps
-        ActualizarMesh();
+        //ActualizarMesh();
 
     }
 
@@ -161,15 +167,28 @@ public class ElasticSolid : MonoBehaviour
             springT.UpdateLength();
         }
 
-        //ActualizarMesh();
+        ActualizarMesh();
     }
 
     void ActualizarMesh()
     {
-        //for (int i = 0; i < nodes.Count; i++)
-        //{
-        //    vertices[i] = transform.InverseTransformPoint(nodes[i].pos);
-        //}
+
+        Mesh visualMesh = this.GetComponentInChildren<MeshFilter>().mesh;
+        Vector3[] updatedVertices = new Vector3[visualMesh.vertexCount];
+        Transform meshTransform = GetComponentInChildren<MeshFilter>().transform;
+
+        foreach (VerticeInfo verticeCont in verticesContenidos)
+        {
+            Tetraedro t = verticeCont.tetraContenedor;
+            float[] w = verticeCont.pesos;
+
+            Vector3 newPos = w[0] * t.a.pos + w[1] * t.b.pos + w[2] * t.c.pos + w[3] * t.d.pos;
+            updatedVertices[verticeCont.verticeID] = meshTransform.transform.InverseTransformPoint(newPos);
+        }
+
+        visualMesh.vertices = updatedVertices;
+        visualMesh.RecalculateNormals();
+
     }
 
     void InicializarNodos()
@@ -194,8 +213,27 @@ public class ElasticSolid : MonoBehaviour
             Vector3 position = new Vector3(x, y, z);
             Node node = new Node(position, massNodes);
             nodes.Add(node);
+        }
+    }
+    void InicializarTetraedros()
+    {
+        tetraedros = new List<Tetraedro>();
 
+        string[] lines = eleFile.text.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries);
 
+        int numTetra = int.Parse(lines[0].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries)[0]);
+
+        for (int i = 1; i <= numTetra; i++)
+        {
+            string[] parts = lines[i].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+
+            int idx0 = int.Parse(parts[1]) - 1;
+            int idx1 = int.Parse(parts[2]) - 1;
+            int idx2 = int.Parse(parts[3]) - 1;
+            int idx3 = int.Parse(parts[4]) - 1;
+
+            Tetraedro t = new Tetraedro(i - 1, nodes[idx0], nodes[idx1], nodes[idx2], nodes[idx3]);
+            tetraedros.Add(t);
         }
     }
 
@@ -217,7 +255,7 @@ public class ElasticSolid : MonoBehaviour
             AgregarMuelleTraccion(tetra.c, tetra.d);
         }
 
-        
+
     }
 
     // MUELLES DE TRACCION
@@ -251,6 +289,64 @@ public class ElasticSolid : MonoBehaviour
         }
     }
 
+    void InicializarBlend()
+    {
+        meshAsset = this.GetComponentInChildren<MeshFilter>().mesh;
+        vertices = meshAsset.vertices;
+        Transform transformMesh = GetComponentInChildren<MeshFilter>().transform;
+
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 verticeWorl = transformMesh.TransformPoint(vertices[i]);
+
+            foreach (Tetraedro tetra in tetraedros)
+            {
+                float[] w = CalcularPesos(verticeWorl, tetra.a.pos, tetra.b.pos, tetra.c.pos, tetra.d.pos);
+                if (DentroTetraedro(w))
+                {
+                    verticesContenidos.Add(new VerticeInfo(i, tetra, w));
+                    break;
+                }
+            }
+        }
+    }
+
+    public static float[] CalcularPesos(Vector3 p, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
+    {
+        float[] w = new float[4];
+
+        // Triángulo opuesto a p0 => (p1, p2, p3)
+        Vector3 n0 = Vector3.Cross(p2 - p1, p3 - p1);
+        w[0] = Vector3.Dot(n0, p - p1) / Vector3.Dot(n0, p0 - p1);
+
+        // Triángulo opuesto a p1 => (p0, p2, p3)
+        Vector3 n1 = Vector3.Cross(p3 - p2, p0 - p2);
+        w[1] = Vector3.Dot(n1, p - p2) / Vector3.Dot(n1, p1 - p2);
+
+        // Triángulo opuesto a p2 => (p0, p1, p3)
+        Vector3 n2 = Vector3.Cross(p1 - p0, p3 - p0);
+        w[2] = Vector3.Dot(n2, p - p0) / Vector3.Dot(n2, p2 - p0);
+
+        // Triángulo opuesto a p3 => (p0, p2, p1)
+        Vector3 n3 = Vector3.Cross(p2 - p0, p1 - p0);
+        w[3] = Vector3.Dot(n3, p - p0) / Vector3.Dot(n3, p3 - p0);
+
+        return w;
+    }
+
+    bool DentroTetraedro(float[] w)
+    {
+        bool dentro = true;
+        for (int i = 0; i < w.Length; i++)
+        {
+            if (w[i] < -0.0005f)
+            {
+                dentro = false; break;
+            }
+        }
+        return dentro;
+    }
+
     void OnDrawGizmos()
     {
         if (nodes == null || springsTraccion == null || tetraedros == null) return;
@@ -272,27 +368,7 @@ public class ElasticSolid : MonoBehaviour
     }
 
 
-    void InicializarTetraedros()
-    {
-        tetraedros = new List<Tetraedro>();
 
-        string[] lines = eleFile.text.Split(new[] { '\n', '\r' }, System.StringSplitOptions.RemoveEmptyEntries);
-
-        int numTetra = int.Parse(lines[0].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries)[0]);
-
-        for (int i = 1; i <= numTetra; i++)
-        {
-            string[] parts = lines[i].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
-
-            int idx0 = int.Parse(parts[1]) - 1;
-            int idx1 = int.Parse(parts[2]) - 1;
-            int idx2 = int.Parse(parts[3]) - 1;
-            int idx3 = int.Parse(parts[4]) - 1;
-
-            Tetraedro t = new Tetraedro(nodes[idx0], nodes[idx1], nodes[idx2], nodes[idx3]);
-            tetraedros.Add(t);
-        }
-    }
 }
 
 
