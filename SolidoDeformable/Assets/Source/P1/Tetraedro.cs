@@ -6,10 +6,10 @@ using UnityEngine;
 public class Tetraedro
 {
     public Node a, b, c, d;
-    public int tetraID;
-    public Tetraedro(int id, Node a, Node b, Node c, Node d)
+    public float volumenTetra;
+    public Tetraedro(float volumen, Node a, Node b, Node c, Node d)
     {
-        this.tetraID = id;
+        this.volumenTetra = volumen;
         this.a = a;
         this.b = b;
         this.c = c;

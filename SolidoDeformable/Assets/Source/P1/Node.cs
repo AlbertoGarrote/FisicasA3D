@@ -32,14 +32,14 @@ public class Node
     //       transform.position = pos;
     //}
 
-    public void ComputeForces(Vector3 gravity)
+    public void ComputeForces(Vector3 gravity, float damping)
     {
         force += mass * gravity;
 
         // amortiguamiento
-        //float dampingFactor = damping * mass;
-        //Vector3 amortiguamiento = -dampingFactor * vel; // multiplicamos por la masa para hacerlo proporcional 
-        //force += amortiguamiento;
+        float dampingFactor = damping * mass;
+        Vector3 amortiguamiento = -dampingFactor * vel; // multiplicamos por la masa para hacerlo proporcional 
+        force += amortiguamiento;
     }
 }
 
