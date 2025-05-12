@@ -5,7 +5,6 @@ using UnityEngine;
 [System.Serializable]
 public class Spring
 {
-
     public Node nodeA, nodeB;
 
     public float Length0;
@@ -13,7 +12,6 @@ public class Spring
 
     public float stiffness, volumen;
 
-    // Use this for initialization
     public Spring(Node a, Node b, float stiffness, float _volumen)
     {
         this.nodeA = a;
@@ -33,7 +31,7 @@ public class Spring
     {
         Vector3 u = nodeA.pos - nodeB.pos;
         u.Normalize();
-        Vector3 force = -(volumen / Mathf.Pow(Length0, 2)) * stiffness * (Length - Length0) * u;
+        Vector3 force = -(volumen / Mathf.Pow(Length0, 2)) * stiffness * (Length - Length0) * u; // nuevo calculo de la fuerza con el volumen asociado al muelle
 
         // amortiguamineto de muelle
         float dampingSpring = dampingFactor * (stiffness * 0.005f); // proporcional a la rigidez

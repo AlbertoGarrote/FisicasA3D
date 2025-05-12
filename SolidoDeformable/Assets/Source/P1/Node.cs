@@ -15,7 +15,6 @@ public class Node
     public Transform fixer;
     public Vector3 diferenciaFixer;
 
-    // Use this for initialization
     public Node(Vector3 posicion, float massNode)
     {
         pos = posicion;
@@ -26,11 +25,6 @@ public class Node
         fixer = null;
         diferenciaFixer = Vector3.zero;
     }
-
-    //// Update is called once per frame
-    //void Update () {
-    //       transform.position = pos;
-    //}
 
     public void ComputeForces(Vector3 gravity, float damping)
     {

@@ -30,6 +30,7 @@ public class Arista
         return nodoA.pos == a2.nodoA.pos && nodoB.pos == a2.nodoB.pos;
     }
 
+    // como ahora no son triangulos compuestos por enteros, se necesita comparar posiciones de los nodos
     private int CompararVectores(Vector3 p1, Vector3 p2) 
     {
         int compX = p1.x.CompareTo(p2.x);

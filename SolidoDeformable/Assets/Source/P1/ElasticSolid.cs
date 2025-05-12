@@ -51,12 +51,9 @@ public class ElasticSolid : MonoBehaviour
     [SerializeField] public List<VerticeInfo> verticesContenidos;
     [SerializeField] public List<Arista> aristas;
     [SerializeField] public List<Face> faces;
-    //[SerializeField] public List<Spring> springsFlexion;
 
-    //public Mesh mesh;
     public Vector3[] vertices;
     public float stiffnessSpringTraccion;
-    //public float stiffnessSpringFlexion;
 
     public List<GameObject> fixers;
 
@@ -84,7 +81,6 @@ public class ElasticSolid : MonoBehaviour
 
     public void Start()
     {
-        //mesh = GetComponent<MeshFilter>().mesh;
         InicializarNodos();
         InicializarFaces();
         InicializarTetraedros();
@@ -115,12 +111,12 @@ public class ElasticSolid : MonoBehaviour
             switch (this.IntegrationMethod)
             {
                 case Integration.Explicit: this.stepExplicit(); break;
-                case Integration.Symplectic: this.stepSymplectic(); break;
+                case Integration.Symplectic: this.stepSymplectic(subTimeStep); break;
                 default:
                     throw new System.Exception("[ERROR] Should never happen!");
             }
         }
-        // actualizamos la mesh despu s de hacer todos los supSteps
+        // actualizamos la mesh despues de hacer todos los subSteps
         ActualizarMesh();
 
     }
@@ -137,7 +133,7 @@ public class ElasticSolid : MonoBehaviour
     /// <summary>
     /// Performs a simulation step in 1D using Symplectic integration.
     /// </summary>
-    private void stepSymplectic()
+    private void stepSymplectic(float subTimeStep)
     {
         // fuerzas nodos
         foreach (Node node in nodes)
@@ -169,8 +165,8 @@ public class ElasticSolid : MonoBehaviour
             }
             if (!node.isFixed)
             {
-                node.vel += TimeStep / node.mass * node.force;
-                node.pos += TimeStep * node.vel;
+                node.vel += subTimeStep / node.mass * node.force;
+                node.pos += subTimeStep * node.vel;
             }
         }
 
@@ -200,9 +196,9 @@ public class ElasticSolid : MonoBehaviour
 
         visualMesh.vertices = updatedVertices;
         visualMesh.RecalculateNormals();
-
     }
 
+    #region Inicializaciones
     void InicializarNodos()
     {
         string[] lines = nodeFile.text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
@@ -383,33 +379,6 @@ public class ElasticSolid : MonoBehaviour
             return CompararVectores(e1.nodoB.pos, e2.nodoB.pos);
         });
     }
-
-
-    //FIXER
-    void EncontrarFixers()
-    {
-        GameObject[] fixersObj = GameObject.FindGameObjectsWithTag("fixer");
-        fixers = new List<GameObject>(fixersObj);
-    }
-
-    void FijarNodosFixer()
-    {
-        foreach (var fixer in fixers)
-        {
-            Collider colliderFixed = fixer.GetComponent<Collider>();
-
-            foreach (Node node in nodes)
-            {
-                if (colliderFixed.bounds.Contains(node.pos))
-                {
-                    node.isFixed = true;
-                    node.fixer = fixer.transform;
-                    node.diferenciaFixer = node.pos - fixer.transform.position;
-                }
-            }
-        }
-    }
-
     void InicializarBlend()
     {
         meshAsset = this.GetComponentInChildren<MeshFilter>().mesh;
@@ -441,15 +410,15 @@ public class ElasticSolid : MonoBehaviour
         n0 = Vector3.Cross(p2 - p1, p3 - p1);
         w[0] = Vector3.Dot(n0, p - p1) / Vector3.Dot(n0, p0 - p1);
 
-        // triángulo opuesto a p0
+        // triángulo opuesto a p1
         n1 = Vector3.Cross(p3 - p2, p0 - p2);
         w[1] = Vector3.Dot(n1, p - p2) / Vector3.Dot(n1, p1 - p2);
 
-        // triángulo opuesto a p0
+        // triángulo opuesto a p2
         n2 = Vector3.Cross(p1 - p0, p3 - p0);
         w[2] = Vector3.Dot(n2, p - p0) / Vector3.Dot(n2, p2 - p0);
 
-        // triángulo opuesto a p0
+        // triángulo opuesto a p3
         n3 = Vector3.Cross(p2 - p0, p1 - p0);
         w[3] = Vector3.Dot(n3, p - p0) / Vector3.Dot(n3, p3 - p0);
 
@@ -468,7 +437,35 @@ public class ElasticSolid : MonoBehaviour
         }
         return dentro;
     }
+    #endregion
 
+    #region Fixers
+    void EncontrarFixers()
+    {
+        GameObject[] fixersObj = GameObject.FindGameObjectsWithTag("fixer");
+        fixers = new List<GameObject>(fixersObj);
+    }
+
+    void FijarNodosFixer()
+    {
+        foreach (var fixer in fixers)
+        {
+            Collider colliderFixed = fixer.GetComponent<Collider>();
+
+            foreach (Node node in nodes)
+            {
+                if (colliderFixed.bounds.Contains(node.pos))
+                {
+                    node.isFixed = true;
+                    node.fixer = fixer.transform;
+                    node.diferenciaFixer = node.pos - fixer.transform.position;
+                }
+            }
+        }
+    }
+    #endregion
+
+    #region PintarGizmosYextras
     void OnDrawGizmos()
     {
         if (nodes == null || springsTraccion == null || tetraedros == null) return;
@@ -498,8 +495,9 @@ public class ElasticSolid : MonoBehaviour
 
         return p1.z.CompareTo(p2.z);
     }
+    #endregion
 
-    // CONTACTO CON ESFERA (PENALTY)
+    #region FuerzaPenalty
     void AplicarFuerzaPenalty(GameObject esfera, float k_penalty)
     {
         SphereCollider colliderEsfera = esfera.GetComponent<SphereCollider>();
@@ -521,8 +519,9 @@ public class ElasticSolid : MonoBehaviour
             }
         }
     }
+    #endregion
 
-    // VIENTO
+    #region FuerzaViento
 
     public Vector3 MediaVelocidadTri(int v1, int v2, int v3)
     {
@@ -570,8 +569,9 @@ public class ElasticSolid : MonoBehaviour
             nodes[v3].force += fuerzaViento / 3f;
         }
     }
-
+    #endregion
 }
+
 
 
 
